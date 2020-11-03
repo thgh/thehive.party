@@ -1,5 +1,5 @@
 export type Stone = {
-  id: any
+  id: number
   player: number
   type: number
   top: number
