@@ -1,7 +1,8 @@
 import { timeout } from '@bothrs/util/async'
 import { postJSON } from '@bothrs/util/fetch'
 
-const AMBIENT_URL = 'http://localhost:50505'
+const AMBIENT_URL = 'https://sheltered-savannah-62641.herokuapp.com'
+// const AMBIENT_URL = 'http://localhost:50505'
 
 type WorkerResponse = {
   url: string
@@ -17,6 +18,7 @@ export class RemoteWorker {
   options?: { alias?: string; retry?: number }
   _instance?: Promise<WorkerResponse>
   _timeout = 1000
+  server = AMBIENT_URL
   onmessage: (data: any) => void = () => {}
   unhandledrejection: (data: any) => void = () => {}
 
@@ -29,7 +31,7 @@ export class RemoteWorker {
     if (!this._instance) {
       console.log(
         'instance',
-        JSON.stringify({ url: this.url, options: this.options })
+        JSON.stringify({ url: this.url.slice(0, 50), options: this.options })
       )
       this._instance = postJSON(AMBIENT_URL, {
         url: this.url,
@@ -63,7 +65,10 @@ export class RemoteWorker {
         }
         throw new Error('Failed to request Worker')
       }
-      throw new Error(response.error.message)
+      if (response.error.message) {
+        throw new Error(response.error.message)
+      }
+      throw new Error('Unexpected Worker error')
     }
     if ('message' in response) {
       return response.message
@@ -73,7 +78,7 @@ export class RemoteWorker {
 
   postMessage(message: any) {
     this.instance.then(({ url }) =>
-      postJSON(url, { message }).then(this.handle)
+      postJSON(url, { message }).then((x) => this.handle(x))
     )
   }
   /** Handle worker response */

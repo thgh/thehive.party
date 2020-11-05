@@ -7,7 +7,7 @@ import { Stone } from '../../lib/types'
 import { useClientside } from '../../lib/useClientside'
 import { postJSON } from '@bothrs/util/fetch'
 
-const BROADCAST_SERVER = false
+const BROADCAST_SERVER = true
 const DEBUG = false
 const STONE_WIDTH = 50
 const STONE_MARGIN = 5
