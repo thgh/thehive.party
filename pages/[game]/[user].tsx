@@ -59,7 +59,7 @@ export default function Game() {
 }
 
 function World({ userId }) {
-  const { stones, active, hold, sync } = useGame()
+  const { stones, active, restart, sync } = useGame()
 
   useEffect(sync, [])
 
@@ -81,6 +81,9 @@ function World({ userId }) {
 
   return (
     <div className="world">
+      <nav>
+        <button onClick={restart}>Restart</button>
+      </nav>
       <div className="field">
         <div className="field-inner">
           <div>
@@ -158,6 +161,7 @@ type GameType = {
   hold: boolean
   socket: null | WebSocket
   stones: Stone[]
+  restart: () => void
   sync: () => void
 }
 
@@ -177,6 +181,10 @@ const useGame = zustand<GameType>((set, get) => ({
     // { id: 8, player: 1, type: 4, top: 0, left: -1 },
     // { id: 9, player: 2, type: 5, top: 1, left: -2 },
   ],
+  restart() {
+    set({ active: null, hold: false, stones: [] })
+    sync({ stones: [] })
+  },
   sync: () => {
     if (!BROADCAST_SERVER) return
     let mounted = true

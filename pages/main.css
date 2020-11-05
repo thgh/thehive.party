@@ -1,3 +1,6 @@
+* {
+  box-sizing: border-box;
+}
 html,
 body {
   padding: 0;
@@ -19,8 +22,26 @@ h1 {
   text-align: center;
 }
 
-* {
-  box-sizing: border-box;
+nav {
+  position: fixed;
+  top: 0;
+  right: 0;
+  padding: 10px;
+  text-align: right;
+}
+nav button {
+  border: 0;
+  opacity: 0.5;
+  text-transform: uppercase;
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 1px;
+  background: none;
+  color: white;
+}
+nav:hover button {
+  background: rgba(100, 150, 200, 0.6);
+  opacity: 1;
 }
 
 .perspective .field {
