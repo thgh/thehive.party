@@ -3,7 +3,6 @@ import Head from 'next/head'
 import zustand from 'zustand'
 import { TransitionGroup, Transition } from 'react-transition-group'
 
-import { Stone } from '../../lib/types'
 import { useClientside } from '../../lib/useClientside'
 import { postJSON } from '@bothrs/util/fetch'
 
@@ -147,6 +146,15 @@ type GameType = {
   sync: () => void
 }
 
+type Stone = {
+  id: number
+  player: number
+  type: number
+  top: number
+  left: number
+  height: number
+}
+
 const useGame = zustand<GameType>((set, get) => ({
   turn: 1,
   active: null,
@@ -204,8 +212,10 @@ function activate(active, hold = false) {
   if (active?.player !== useGame.getState().turn) {
     return // console.log('not your turn', active)
   }
-  const current = useGame.getState().active
-  const holding = useGame.getState().hold
+  const { stones, active: current, hold: holding } = useGame.getState()
+  if (!highest(active, 0, stones)) {
+    return
+  }
   if (holding && hold && current?.id === active?.id) {
     useGame.setState({ active: null, hold: false })
   } else if (holding && hold) {
@@ -229,13 +239,15 @@ function moveStone(stone: Stone, { top = 0, left = 0 }) {
   }
   useGame.setState(({ stones, turn }) => {
     const existing = stones.find((s) => s.id === stone.id)
+    const height = stones.filter((s) => s.top === top && s.left === left).length
 
     turn = turn === 1 ? 2 : 1
     stones = existing
       ? stones
           .filter((s) => s.id !== stone.id)
-          .concat({ ...existing, top, left })
-      : stones.concat({ ...stone, top, left })
+          .concat({ ...existing, top, left, height })
+      : stones.concat({ ...stone, top, left, height })
+    stones.sort((a, b) => a.id - b.id)
 
     // TODO: don't broadcast to self, it interferes with transition
     setTimeout(() => sync({ stones, turn }), 500)
@@ -268,6 +280,10 @@ function getMoves(
   if (!stones.length) {
     return [{ type: 0, top: 0, left: 0 }]
   }
+
+  // Covered stones are ignored
+  stones = stones.filter(highest)
+
   // My first stone, around any stone
   if (!stones.find((s) => s.player === active.player)) {
     // console.log('around any', stones.length, active?.player)
@@ -276,7 +292,7 @@ function getMoves(
       .filter((m) => !stones.find((s) => m.top === s.top && m.left === s.left))
   }
 
-  // Around any stone
+  // MOVE EXISTING STONE - Around any stone
   if ('top' in active && typeof active.top === 'number') {
     switch (active.type) {
       case 1:
@@ -325,7 +341,7 @@ function PlacedStone(rest) {
 function Hexagon({
   placed = false,
   active = false,
-  stone: { id, player = 0, type = 2, top = 0, left = 0 },
+  stone: { id, player = 0, type = 2, top = 0, left = 0, height = 0 },
   style = {},
   ...rest
 }) {
@@ -333,15 +349,15 @@ function Hexagon({
   const symbolSize = type === 1 ? 36 : 24
   return (
     <div
-      className={'hexagon' + (active ? ' active' : '')}
+      className={'hexagon' + (active ? ' active' : '') + (id ? ' id' : '')}
       style={{
         ...(placed
           ? {
               position: 'absolute',
-              top: (top * STONE_HEIGHT_M * 2 * 200) / 174 / 3,
+              top: (top * STONE_HEIGHT_M * 2 * 200) / 174 / 3 - height * 7,
               left:
                 (left + parseInt('' + top / 2) + (top % 2) / 2) * STONE_WIDTH_M,
-              transition: '',
+              zIndex: id ? height + 1 : 10,
             }
           : {}),
         ...style,
@@ -364,7 +380,13 @@ function Hexagon({
           {left}
         </div>
       )}
+      {DEBUG && (
+        <div style={{ position: 'absolute', left: 5, top: 20, fontSize: 10 }}>
+          {height}
+        </div>
+      )}
       <svg
+        className="hexagon-svg"
         width={STONE_WIDTH}
         height={STONE_HEIGHT}
         viewBox={[-stroke / 2, -stroke / 2, 174 + stroke, 200 + stroke].join(
@@ -372,7 +394,7 @@ function Hexagon({
         )}
       >
         <polyline
-          stroke={STONE_FILLS[type]}
+          stroke={type ? '#fff' : STONE_FILLS[type]}
           strokeWidth={type ? 0 : stroke}
           strokeLinejoin="round"
           strokeLinecap="round"
@@ -414,6 +436,13 @@ function toggleFullscreen(evt) {
   } else {
     document.exitFullscreen()
   }
+}
+
+// Quadratic complexity but n is low
+function highest({ top, left, height }, i, stones) {
+  return !stones.find(
+    (s) => s.top === top && s.left === left && s.height > height
+  )
 }
 
 // '#f39c12', // Queen bee

@@ -102,6 +102,7 @@ function onMessage(id: SocketId, newState: string) {
   console.log('ws:message', newState)
   if (!newState.startsWith('{')) return
   state = { ...state, ...JSON.parse(newState) }
+//filter
   sockets.forEach(sock => sock.send(JSON.stringify({ id, state })))
 }
 
