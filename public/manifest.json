@@ -1,0 +1,17 @@
+{
+  "background_color": "#000",
+  "theme_color": "#000",
+  "name": "The Hive Boardgame",
+  "short_name": "The Hive",
+  "display": "standalone",
+  "start_url": "/",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/maskable_icon.png",
+      "sizes": "2030x2030",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

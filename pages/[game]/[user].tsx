@@ -48,6 +48,7 @@ export default function Game() {
       <Head>
         <title>The Hive</title>
         <link rel="icon" href="/favicon.ico" />
+        <link rel="manifest" href="/manifest.json" />
       </Head>
       <main>
         <h1 className="title">{client.userId || '?'}</h1>
