@@ -47,8 +47,14 @@ export default function Game() {
     <div className="container ">
       <Head>
         <title>The Hive</title>
-        <link rel="icon" href="/favicon.ico" />
+        <link rel="icon" href="/maskable_icon512.png" />
         <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#9C0464" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta
+          name="apple-mobile-web-app-status-bar-style"
+          content="black-translucent"
+        />
       </Head>
       <main>
         <h1 className="title">{client.userId || '?'}</h1>
