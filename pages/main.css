@@ -26,11 +26,12 @@ nav {
   position: fixed;
   top: 0;
   right: 0;
-  padding: 10px;
+  padding: 0;
   text-align: right;
 }
 nav button {
   border: 0;
+  padding: 1em;
   opacity: 0.5;
   text-transform: uppercase;
   font: inherit;
@@ -38,8 +39,9 @@ nav button {
   letter-spacing: 1px;
   background: none;
   color: white;
+  cursor: pointer;
 }
-nav:hover button {
+nav button:hover {
   background: rgba(100, 150, 200, 0.6);
   opacity: 1;
 }

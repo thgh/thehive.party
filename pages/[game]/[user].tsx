@@ -82,6 +82,7 @@ function World({ userId }) {
   return (
     <div className="world">
       <nav>
+        <button onClick={toggleFullscreen}>Fullscreen</button>
         <button onClick={restart}>Restart</button>
       </nav>
       <div className="field">
@@ -414,6 +415,19 @@ function Hexagon({
       `}</style>
     </div>
   )
+}
+
+function toggleFullscreen(evt) {
+  evt?.target?.blur()
+  let elem = document.querySelector('main')
+
+  if (!document.fullscreenElement) {
+    elem.requestFullscreen().catch((err) => {
+      console.warn(`Error attempting to enable full-screen mode`, err)
+    })
+  } else {
+    document.exitFullscreen()
+  }
 }
 
 // '#f39c12', // Queen bee
