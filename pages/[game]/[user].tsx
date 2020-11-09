@@ -59,16 +59,12 @@ export default function Game() {
 }
 
 function World({ userId }) {
-  const { stones, active, restart, sync } = useGame()
+  const { stones, turn, active, restart, sync } = useGame()
 
   useEffect(sync, [])
 
-  const reservoir1 = STONES_RESERVOIR.filter(
-    (r) => r.player === 1 && !stones.find((s) => s.id === r.id)
-  )
-
-  const reservoir2 = STONES_RESERVOIR.filter(
-    (r) => r.player === 2 && !stones.find((s) => s.id === r.id)
+  const reservoir = STONES_RESERVOIR.filter(
+    (r) => r.player === turn && !stones.find((s) => s.id === r.id)
   )
 
   const moves = getMoves(stones, active)
@@ -123,30 +119,14 @@ function World({ userId }) {
         </div>
       </div>
       <div className="reservoirs">
-        <div className="reservoir reservoir-1">
-          {reservoir1.map((stone) => (
+        <div className={'reservoir reservoir-' + turn}>
+          {reservoir.map((stone) => (
             <Hexagon
               key={stone.id}
               stone={stone}
               active={stone.id === active?.id}
               onClick={() => activate(stone, true)}
               onMouseEnter={() => activate(stone)}
-              // onMouseLeave={deactivate}
-              onDragStart={() => ({ type: 3 })}
-              draggable
-            />
-          ))}
-        </div>
-        <div className="reservoir reservoir-2">
-          {reservoir2.map((stone) => (
-            <Hexagon
-              key={stone.id}
-              stone={stone}
-              active={stone.id === active?.id}
-              onClick={() => activate(stone, true)}
-              onMouseEnter={() => activate(stone)}
-              // onMouseLeave={deactivate}
-              onDragStart={() => ({ type: 3 })}
               draggable
             />
           ))}
@@ -158,6 +138,7 @@ function World({ userId }) {
 // {JSON.stringify(stones)}
 
 type GameType = {
+  turn: 1 | 2
   active: null | { id: number; player: number; type: number } | Stone
   hold: boolean
   socket: null | WebSocket
@@ -167,6 +148,7 @@ type GameType = {
 }
 
 const useGame = zustand<GameType>((set, get) => ({
+  turn: 1,
   active: null,
   hold: false,
   socket: null,
@@ -219,6 +201,9 @@ function sync(data: Partial<GameType>) {
   }
 }
 function activate(active, hold = false) {
+  if (active?.player !== useGame.getState().turn) {
+    return // console.log('not your turn', active)
+  }
   const current = useGame.getState().active
   const holding = useGame.getState().hold
   if (holding && hold && current?.id === active?.id) {
@@ -242,9 +227,10 @@ function moveStone(stone: Stone, { top = 0, left = 0 }) {
   if (!stone) {
     return
   }
-  useGame.setState(({ stones }) => {
+  useGame.setState(({ stones, turn }) => {
     const existing = stones.find((s) => s.id === stone.id)
 
+    turn = turn === 1 ? 2 : 1
     stones = existing
       ? stones
           .filter((s) => s.id !== stone.id)
@@ -252,8 +238,8 @@ function moveStone(stone: Stone, { top = 0, left = 0 }) {
       : stones.concat({ ...stone, top, left })
 
     // TODO: don't broadcast to self, it interferes with transition
-    setTimeout(() => sync({ stones }), 500)
-    return { stones, active: null, hold: false }
+    setTimeout(() => sync({ stones, turn }), 500)
+    return { stones, turn, active: null, hold: false }
   })
 }
 
