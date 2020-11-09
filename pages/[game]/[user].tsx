@@ -31,7 +31,7 @@ const STONES_RESERVOIR = STONE_TYPES.flatMap((type) => [
   { type, player: 2 },
 ]).map((s, id) => ({
   ...s,
-  id,
+  id: id + 1,
 }))
 
 const transitionStyles = {
