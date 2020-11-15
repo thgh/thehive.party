@@ -1,7 +1,7 @@
 import { timeout } from '@bothrs/util/async'
 import { postJSON } from '@bothrs/util/fetch'
 
-const AMBIENT_URL = 'https://sheltered-savannah-62641.herokuapp.com'
+const AMBIENT_URL = 'https://ambient-1.herokuapp.com'
 // const AMBIENT_URL = 'http://localhost:50505'
 
 type WorkerResponse = {
@@ -17,12 +17,13 @@ export class RemoteWorker {
   url = ''
   options?: { alias?: string; retry?: number }
   _instance?: Promise<WorkerResponse>
-  _timeout = 1000
+  _timeout = 6000
   server = AMBIENT_URL
   onmessage: (data: any) => void = () => {}
   unhandledrejection: (data: any) => void = () => {}
 
   constructor(url: string, options?: { alias?: string }) {
+    console.log('api/_ambient constructor')
     this.url = url
     this.options = options
   }
@@ -30,16 +31,21 @@ export class RemoteWorker {
   get instance() {
     if (!this._instance) {
       console.log(
-        'instance',
+        'api/_ambient first instance',
         JSON.stringify({ url: this.url.slice(0, 50), options: this.options })
       )
-      this._instance = postJSON(AMBIENT_URL, {
-        url: this.url,
-        options: this.options,
-      }).catch(
+      this._instance = Promise.race([
+        timeout(this._timeout).then(() => Promise.reject(new Error('timeout'))),
+        postJSON(AMBIENT_URL, {
+          url: this.url,
+          options: this.options,
+        }),
+      ]).catch(
         (e) => new Promise(() => console.log('Failed to start', e.message))
       )
       this._instance.then((x) => this.handle(x))
+    } else {
+      console.log('api/_ambient get instance')
     }
     return this._instance
   }
@@ -49,11 +55,11 @@ export class RemoteWorker {
   }
 
   async request(message: any): Promise<any> {
-    console.log('request', message)
+    console.log('api/_ambient request', message)
     const response = await this.instance.then(({ url }) =>
       postJSON(url, { message })
     )
-    console.log('response', message, '=>', response)
+    console.log('api/_ambient response', message, '=>', response)
     if ('error' in response) {
       if (response.error.status === 404) {
         this._instance = undefined
@@ -77,6 +83,7 @@ export class RemoteWorker {
   }
 
   postMessage(message: any) {
+    console.log('api/_ambient postMessage')
     this.instance.then(({ url }) =>
       postJSON(url, { message }).then((x) => this.handle(x))
     )
@@ -84,10 +91,10 @@ export class RemoteWorker {
   /** Handle worker response */
   handle(response: WorkerResponse) {
     if (!response.url) {
-      console.error('RemoteWorker response url missing')
+      console.error('api/_ambient handle response url missing')
       return
     }
-    console.log('Worker url', response.url)
+    console.log('api/_ambient handle', response)
     if ('error' in response) {
       if (typeof this.unhandledrejection === 'function') {
         this.unhandledrejection(response.message)
