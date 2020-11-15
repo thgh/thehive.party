@@ -1,13 +1,15 @@
-import React, { useEffect, useReducer, useRef, useState } from 'react'
+import React, { useEffect, useMemo } from 'react'
 import Head from 'next/head'
 import zustand from 'zustand'
 import { TransitionGroup, Transition } from 'react-transition-group'
 
 import { useClientside } from '../../lib/useClientside'
 import { postJSON } from '@bothrs/util/fetch'
+import { ls } from '@bothrs/util/ls'
 
 const BROADCAST_SERVER = true
 const DEBUG = false
+const NAV_HEIGHT = 40
 const STONE_WIDTH = 50
 const STONE_MARGIN = 5
 const STONE_FILLS = [
@@ -65,9 +67,9 @@ export default function Game() {
 }
 
 function World({ userId }) {
-  const { stones, turn, active, restart, sync } = useGame()
+  const { online, socket, stones, turn, active, restart, sync } = useGame()
 
-  useEffect(sync, [])
+  useEffect(sync, [online])
 
   const reservoir = STONES_RESERVOIR.filter(
     (r) => r.player === turn && !stones.find((s) => s.id === r.id)
@@ -76,19 +78,49 @@ function World({ userId }) {
   const moves = getMoves(stones, active)
 
   // TODO
-  // const { top, left } = getCenter(stones)
+  const center = getCenter(stones)
+  const width = useMemo(() => window.innerWidth, [turn])
+  const height = useMemo(
+    () => window.innerHeight * 0.96 - NAV_HEIGHT - STONE_HEIGHT,
+    [turn]
+  )
+  const zoom = Math.min(width / center.width, height / center.height)
+
+  const x = -(center.leftMax + center.leftMin) / 2
+  const y = NAV_HEIGHT / zoom / 2 - (center.topMax + center.topMin) / 2
+
   // useEffect(() => {
-  //   console.log('topleft', top, left)
-  // }, [stones, top, left])
+  //   console.log('zoom', zoom, width, '/', height)
+  //   console.log('c: ', center.width, '/', center.height)
+  //   console.log('s: ', width / center.width, '/', height / center.height)
+  // }, [zoom, width, height, center.width, center.height])
 
   return (
     <div className="world">
       <nav>
+        {socket ? 'connected' : ''}
+        <button onClick={toggleOnline}>Play{online ? 'ing' : ''} online</button>
         <button onClick={toggleFullscreen}>Fullscreen</button>
         <button onClick={restart}>Restart</button>
       </nav>
       <div className="field">
-        <div className="field-inner">
+        <div
+          className="field-inner"
+          style={{
+            transform: ` scale(${zoom}) translateX(${x}px) translateY(${y}px)`,
+          }}
+        >
+          {DEBUG && (
+            <div
+              className="actual"
+              style={{
+                top: center.topMin,
+                left: center.leftMin,
+                width: center.width,
+                height: center.height,
+              }}
+            ></div>
+          )}
           <div>
             {stones.map((stone) => (
               <PlacedStone
@@ -147,18 +179,24 @@ type GameType = {
   turn: 1 | 2
   active: null | { id: number; player: number; type: number } | Stone
   hold: boolean
-  socket: null | WebSocket
   stones: Stone[]
   restart: () => void
+
+  // Multiplayer
+  online: boolean
+  socket: null | WebSocket
   sync: () => void
 }
 
-type Stone = {
+type Position = {
+  top: number
+  left: number
+}
+
+type Stone = Position & {
   id: number
   player: number
   type: number
-  top: number
-  left: number
   height: number
 }
 
@@ -166,7 +204,6 @@ const useGame = zustand<GameType>((set, get) => ({
   turn: 1,
   active: null,
   hold: false,
-  socket: null,
   stones: [
     // { id: 1, player: 1, type: 1, top: 1, left: 1 },
     // { id: 2, player: 2, type: 2, top: 2, left: 0 },
@@ -183,36 +220,83 @@ const useGame = zustand<GameType>((set, get) => ({
     set({ active: null, hold: false, stones: [] })
     sync({ stones: [] })
   },
+
+  // Multiplayer
+  online: false,
+  socket: null,
   sync: () => {
     if (!BROADCAST_SERVER) return
     let mounted = true
-    postJSON('/api/worker?room=' + window.location.pathname.split('/')[1]).then(
-      ({ ws }) => {
-        const socket = new WebSocket(ws)
-        socket.addEventListener('open', (evt) => {
-          set({ socket })
-        })
-        socket.addEventListener('message', (evt) => {
-          const data = JSON.parse(evt.data)
-          if (data.state) {
-            // console.log('got data', data.state)
-            set(data.state)
-          }
-        })
-      }
-    )
+    if (get().online) {
+      connect(window.location.pathname.split('/')[1]).catch((e) => {
+        console.log('Failed to connect', e)
+      })
+    }
     return () => {
       mounted = false
+      get().socket?.close()
+    }
+
+    async function connect(room) {
+      console.log('connect', room)
+      const { ws } = await postJSON('/api/worker?room=' + room)
+      if (!ws) {
+        throw new Error('Failed to get room')
+      }
+      console.log('connecting', ws)
+      const socket = new WebSocket(ws)
+      socket.addEventListener('open', (evt) => {
+        if (!mounted || !get().online) {
+          return socket.close()
+        }
+
+        console.log('connection open', socket.readyState)
+        set({ socket })
+      })
+      socket.addEventListener('message', (evt) => {
+        const data = JSON.parse(evt.data)
+        if (data.state) {
+          // console.log('got data', data.state)
+          set(data.state)
+
+          const { active, turn } = get()
+          if (active && active.player !== turn) {
+            set({ active: null, hold: false })
+          }
+        }
+      })
+      socket.addEventListener('close', (evt) => {
+        console.log('connect.closed', evt)
+        set({ socket: null })
+        if (mounted && get().online) {
+          connect(room)
+        }
+      })
+      socket.addEventListener('error', (evt) => {
+        console.log('connect.error', evt)
+        socket.close()
+        set({ socket: null })
+      })
     }
   },
 }))
 
+if (typeof window !== 'undefined') {
+  const state = ls('thehive:state')
+  if (state) {
+    useGame.setState(state)
+  }
+}
+
 function sync(data: Partial<GameType>) {
   if (!BROADCAST_SERVER) return
+  const { socket, online } = useGame.getState()
   try {
-    useGame.getState().socket?.send(JSON.stringify(data))
+    socket.send(JSON.stringify(data))
   } catch (e) {
-    console.warn('ws down')
+    if (online) {
+      alert('sync down')
+    }
   }
 }
 function activate(active, hold = false) {
@@ -262,19 +346,37 @@ function moveStone(stone: Stone, { top = 0, left = 0 }) {
   })
 }
 
-function getCenter(stones: Stone[]) {
-  let a = 0
-  let b = 0
-  let c = 0
-  let d = 0
-  for (const { top, left } of stones) {
-    if (top > a) a = top
-    if (left > b) b = left
-    if (top < c) c = top
-    if (left < d) d = left
+function getCenter(stones: Position[]) {
+  if (!stones.length) {
+    stones = [{ top: 0, left: 0 }]
   }
-  console.log('abcd', a, b, c, d)
-  return { top: a - c, left: b - d }
+  let topMax = -Infinity
+  let leftMax = -Infinity
+  let topMin = Infinity
+  let leftMin = Infinity
+  for (const stone of stones) {
+    const { top, left } = toField(stone)
+    if (top > topMax) topMax = top
+    if (left > leftMax) leftMax = left
+    if (top < topMin) topMin = top
+    if (left < leftMin) leftMin = left
+  }
+  // Add stone size
+  topMax += STONE_HEIGHT_M
+  leftMax += STONE_WIDTH_M
+  // Add ghost stones
+  topMin -= (STONE_HEIGHT_M * 5) / 6
+  leftMin -= STONE_WIDTH_M + STONE_MARGIN
+  topMax += (STONE_HEIGHT_M * 5) / 6
+  leftMax += STONE_WIDTH_M
+  return {
+    topMax,
+    leftMax,
+    topMin,
+    leftMin,
+    height: topMax - topMin,
+    width: leftMax - leftMin,
+  }
 }
 
 function getMoves(
@@ -345,13 +447,22 @@ function PlacedStone(rest) {
   return <Hexagon placed {...rest} />
 }
 
+function toField({ top, left }: { top: number; left: number }) {
+  return {
+    top: (top * STONE_HEIGHT_M * 2 * 200) / 174 / 3,
+    left: (left + parseInt('' + top / 2) + (top % 2) / 2) * STONE_WIDTH_M,
+  }
+}
+
 function Hexagon({
   placed = false,
   active = false,
-  stone: { id, player = 0, type = 2, top = 0, left = 0, height = 0 },
+  stone,
   style = {},
   ...rest
 }) {
+  const { id, player = 0, type = 2, height = 0 } = stone
+  const { top, left } = placed ? toField(stone) : { top: 0, left: 0 }
   const stroke = 8
   const symbolSize = type === 1 ? 36 : 24
   return (
@@ -361,9 +472,8 @@ function Hexagon({
         ...(placed
           ? {
               position: 'absolute',
-              top: (top * STONE_HEIGHT_M * 2 * 200) / 174 / 3 - height * 7,
-              left:
-                (left + parseInt('' + top / 2) + (top % 2) / 2) * STONE_WIDTH_M,
+              top: top - height * 7,
+              left: left,
               zIndex: id ? height + 1 : 10,
             }
           : {}),
@@ -378,20 +488,11 @@ function Hexagon({
         </div>
       )}
       {DEBUG && (
-        <div style={{ position: 'absolute', left: 20, top: 5, fontSize: 10 }}>
-          {top}
-        </div>
-      )}
-      {DEBUG && (
         <div style={{ position: 'absolute', left: 5, top: 20, fontSize: 10 }}>
-          {left}
+          {stone.top}, {stone.left} {height ? ', ' + height : ''}
         </div>
       )}
-      {DEBUG && (
-        <div style={{ position: 'absolute', left: 5, top: 20, fontSize: 10 }}>
-          {height}
-        </div>
-      )}
+
       <svg
         className="hexagon-svg"
         width={STONE_WIDTH}
@@ -430,6 +531,13 @@ function Hexagon({
       `}</style>
     </div>
   )
+}
+
+function toggleOnline(evt) {
+  useGame.setState((game) => {
+    ls('thehive:state', { online: !game.online })
+    return { ...game, online: !game.online }
+  })
 }
 
 function toggleFullscreen(evt) {

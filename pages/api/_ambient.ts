@@ -40,9 +40,10 @@ export class RemoteWorker {
           url: this.url,
           options: this.options,
         }),
-      ]).catch(
-        (e) => new Promise(() => console.log('Failed to start', e.message))
-      )
+      ]).catch((e) => {
+        console.log('api/_ambient fail instance', e.message)
+        return Promise.reject(e)
+      })
       this._instance.then((x) => this.handle(x))
     } else {
       console.log('api/_ambient get instance')

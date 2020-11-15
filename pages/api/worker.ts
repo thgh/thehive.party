@@ -39,7 +39,7 @@ export default async (req: NextApiRequest, res: NextApiResponse) => {
     console.log('api/worker caught', e)
     res.status(500).json({
       ready: false,
-      error: {message:e.message}
+      error: { message: e.message },
     })
   }
 }
@@ -104,6 +104,12 @@ export async function onwebsocket(req: ServerRequest) {
 function onConnect(id: SocketId, sock: WebSocket) {
   console.log('wbw.ws.join', id, state)
   sock.send(JSON.stringify({ id, state }))
+  sockets.forEach((sock, uid) => {
+    if (sock.isClosed){
+      console.log('con ignore unexpected close')
+      sockets.delete(uid)
+    }
+  })
   sockets.forEach(sock => sock.send(JSON.stringify({ join: id })))
   sockets.set(id, sock)
 }
@@ -113,12 +119,24 @@ function onMessage(id: SocketId, newState: string) {
   if (!newState.startsWith('{')) return
   state = { ...state, ...JSON.parse(newState) }
 //filter
-  sockets.forEach(sock => sock.send(JSON.stringify({ id, state })))
+  sockets.forEach((sock, uid) => {
+    if (sock.isClosed){
+      console.log('mes ignore unexpected close')
+      sockets.delete(uid)
+    }
+  })
+  sockets.forEach((sock, uid) => uid !== id && sock.send(JSON.stringify({ id, state })))
 }
 
 function onClose(id: SocketId, event?: any) {
   console.log('wbw.ws.close', id, event)
   sockets.delete(id)
+  sockets.forEach((sock, uid) => {
+    if (sock.isClosed){
+      console.log('clo ignore unexpected close')
+      sockets.delete(uid)
+    }
+  })
   sockets.forEach(sock => sock.send(JSON.stringify({ leave: id })))
 }
 `)

@@ -71,23 +71,30 @@ nav button:hover {
 }
 .field-inner {
   position: relative;
+  transition: all 1s;
 }
+
+.actual {
+  position: absolute;
+  background: red;
+  transition: all 1s;
+}
+
 .reservoirs {
-  flex: 0;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: row;
+  overflow: auto;
 }
 .reservoir {
   flex: 1;
   max-height: 50vh;
   display: flex;
-  flex-wrap: wrap;
-  padding: 20px;
+  padding: 2vh 2vw;
   justify-content: center;
-  overflow: auto;
 }
 .reservoir .hexagon {
-  margin: 3px;
+  margin: 0 3px;
 }
 .reservoir-1 {
   background: rgba(0, 100, 200, 0.3);
