@@ -1,40 +1,33 @@
 import React, { useEffect, useMemo } from 'react'
-import Head from 'next/head'
-import zustand from 'zustand'
+// import zustand from 'zustand'
 import { TransitionGroup, Transition } from 'react-transition-group'
 
-import { useClientside } from '../../lib/useClientside'
-import { postJSON } from '@bothrs/util/fetch'
+// import { postJSON } from '@bothrs/util/fetch'
 import { ls } from '@bothrs/util/ls'
+
+import Head from '../../components/Head'
+
+import {
+  STONE_FILLS,
+  ALL_PIECES,
+  Piece,
+  Position,
+  PlacedPiece,
+  useGame,
+  GameType,
+} from '../../lib/thehive'
+import { useClientside } from '../../lib/useClientside'
 
 const BROADCAST_SERVER = true
 const DEBUG = false
 const NAV_HEIGHT = 40
 const STONE_WIDTH = 50
 const STONE_MARGIN = 5
-const STONE_FILLS = [
-  '#888', // Ghost
-  '#f39c12', // Queen bee
-  '#34495e', // Spider
-  '#8e44ad', // Beetles
-  '#27ae60', //Grasshoppers
-  '#c0392b', // Soldier Ants
-  '#2980b9',
-]
-const STONE_TYPES = [1, 2, 2, 3, 3, 4, 4, 4, 5, 5, 5]
 
 // Computed
 const STONE_HEIGHT = (STONE_WIDTH * 200) / 174
 const STONE_HEIGHT_M = STONE_HEIGHT + STONE_MARGIN
 const STONE_WIDTH_M = STONE_WIDTH + STONE_MARGIN
-
-const STONES_RESERVOIR = STONE_TYPES.flatMap((type) => [
-  { type, player: 1 },
-  { type, player: 2 },
-]).map((s, id) => ({
-  ...s,
-  id: id + 1,
-}))
 
 const transitionStyles = {
   entering: { opacity: 1, transform: 'scale(1)' },
@@ -47,17 +40,7 @@ export default function Game() {
   const client = useClientside()
   return (
     <div className="container ">
-      <Head>
-        <title>The Hive</title>
-        <link rel="icon" href="/maskable_icon512.png" />
-        <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#9C0464" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta
-          name="apple-mobile-web-app-status-bar-style"
-          content="black-translucent"
-        />
-      </Head>
+      <Head />
       <main>
         <h1 className="title">{client.userId || '?'}</h1>
         {client.state === 1 ? <World {...client} /> : null}
@@ -67,17 +50,25 @@ export default function Game() {
 }
 
 function World({ userId }) {
-  const { online, socket, stones, turn, active, restart, sync } = useGame()
+  const {
+    online,
+    socket,
+    stones,
+    turn,
+    active,
+    restart,
+    connect,
+    participants,
+  } = useGame()
 
-  useEffect(sync, [online])
+  useEffect(connect, [online])
 
-  const reservoir = STONES_RESERVOIR.filter(
+  const reservoir = ALL_PIECES.filter(
     (r) => r.player === turn && !stones.find((s) => s.id === r.id)
   )
 
   const moves = getMoves(stones, active)
 
-  // TODO
   const center = getCenter(stones)
   const width = useMemo(() => window.innerWidth, [turn])
   const height = useMemo(
@@ -102,12 +93,13 @@ function World({ userId }) {
         <button onClick={toggleOnline}>Play{online ? 'ing' : ''} online</button>
         <button onClick={toggleFullscreen}>Fullscreen</button>
         <button onClick={restart}>Restart</button>
+        <pre>{JSON.stringify(participants, null, 2)}</pre>
       </nav>
       <div className="field">
         <div
           className="field-inner"
           style={{
-            transform: ` scale(${zoom}) translateX(${x}px) translateY(${y}px)`,
+            transform: `scale(${zoom}) translateX(${x}px) translateY(${y}px)`,
           }}
         >
           {DEBUG && (
@@ -145,8 +137,8 @@ function World({ userId }) {
                     <PlacedStone
                       style={transitionStyles[state]}
                       stone={position}
-                      onClick={() => moveStone(active as Stone, position)}
-                      onDrop={() => moveStone(active as Stone, position)}
+                      onClick={() => moveStone(active as Piece, position)}
+                      onDrop={() => moveStone(active as Piece, position)}
                       onDragOver={(evt) => evt.preventDefault()}
                     />
                   )}
@@ -175,130 +167,104 @@ function World({ userId }) {
 }
 // {JSON.stringify(stones)}
 
-type GameType = {
-  turn: 1 | 2
-  active: null | { id: number; player: number; type: number } | Stone
-  hold: boolean
-  stones: Stone[]
-  restart: () => void
+// type GameType = {
+//   turn: 1 | 2
+//   active: null | Piece
+//   hold: boolean
+//   stones: PlacedPiece[]
+//   restart: () => void
 
-  // Multiplayer
-  online: boolean
-  socket: null | WebSocket
-  sync: () => void
-}
+//   // Multiplayer
+//   online: boolean
+//   socket: null | WebSocket
+//   sync: () => void
+// }
 
-type Position = {
-  top: number
-  left: number
-}
+// const useGame = zustand<GameType>((set, get) => ({
+//   turn: 1,
+//   active: null,
+//   hold: false,
+//   stones: [
+//     // { id: 1, player: 1, type: 1, top: 1, left: 1 },
+//     // { id: 2, player: 2, type: 2, top: 2, left: 0 },
+//     // { id: 3, player: 1, type: 3, top: 2, left: 1 },
+//     // { id: 4, player: 2, type: 4, top: 0, left: 2 },
+//     // { id: 5, player: 1, type: 5, top: 0, left: 1 },
+//     // { id: 0, player: 2, type: 6, top: 1, left: 0 },
+//     // { id: 6, player: 1, type: 3, top: -1, left: -1 },
+//     // { id: 7, player: 2, type: 3, top: -1, left: -2 },
+//     // { id: 8, player: 1, type: 4, top: 0, left: -1 },
+//     // { id: 9, player: 2, type: 5, top: 1, left: -2 },
+//   ],
+//   restart() {
+//     set({ active: null, hold: false, stones: [] })
+//     sync({ stones: [] })
+//   },
 
-type Stone = Position & {
-  id: number
-  player: number
-  type: number
-  height: number
-}
+//   // Multiplayer
+//   online: false,
+//   socket: null,
+//   sync: () => {
+//     if (!BROADCAST_SERVER) return
+//     let mounted = true
+//     if (get().online) {
+//       connect(window.location.pathname.split('/')[1]).catch((e) => {
+//         console.log('Failed to connect', e)
+//       })
+//     }
+//     return () => {
+//       mounted = false
+//       get().socket?.close()
+//     }
 
-const useGame = zustand<GameType>((set, get) => ({
-  turn: 1,
-  active: null,
-  hold: false,
-  stones: [
-    // { id: 1, player: 1, type: 1, top: 1, left: 1 },
-    // { id: 2, player: 2, type: 2, top: 2, left: 0 },
-    // { id: 3, player: 1, type: 3, top: 2, left: 1 },
-    // { id: 4, player: 2, type: 4, top: 0, left: 2 },
-    // { id: 5, player: 1, type: 5, top: 0, left: 1 },
-    // { id: 0, player: 2, type: 6, top: 1, left: 0 },
-    // { id: 6, player: 1, type: 3, top: -1, left: -1 },
-    // { id: 7, player: 2, type: 3, top: -1, left: -2 },
-    // { id: 8, player: 1, type: 4, top: 0, left: -1 },
-    // { id: 9, player: 2, type: 5, top: 1, left: -2 },
-  ],
-  restart() {
-    set({ active: null, hold: false, stones: [] })
-    sync({ stones: [] })
-  },
+//     async function connect(room) {
+//       console.log('connect', room)
+//       const { ws } = await postJSON('/api/worker?room=' + room)
+//       if (!ws) {
+//         throw new Error('Failed to get room')
+//       }
+//       console.log('connecting', ws)
+//       const socket = new WebSocket(ws)
+//       socket.addEventListener('open', (evt) => {
+//         if (!mounted || !get().online) {
+//           return socket.close()
+//         }
 
-  // Multiplayer
-  online: false,
-  socket: null,
-  sync: () => {
-    if (!BROADCAST_SERVER) return
-    let mounted = true
-    if (get().online) {
-      connect(window.location.pathname.split('/')[1]).catch((e) => {
-        console.log('Failed to connect', e)
-      })
-    }
-    return () => {
-      mounted = false
-      get().socket?.close()
-    }
+//         console.log('connection open', socket.readyState)
+//         set({ socket })
+//       })
+//       socket.addEventListener('message', (evt) => {
+//         const data = JSON.parse(evt.data)
+//         if (data.state) {
+//           // console.log('got data', data.state)
+//           set(data.state)
 
-    async function connect(room) {
-      console.log('connect', room)
-      const { ws } = await postJSON('/api/worker?room=' + room)
-      if (!ws) {
-        throw new Error('Failed to get room')
-      }
-      console.log('connecting', ws)
-      const socket = new WebSocket(ws)
-      socket.addEventListener('open', (evt) => {
-        if (!mounted || !get().online) {
-          return socket.close()
-        }
-
-        console.log('connection open', socket.readyState)
-        set({ socket })
-      })
-      socket.addEventListener('message', (evt) => {
-        const data = JSON.parse(evt.data)
-        if (data.state) {
-          // console.log('got data', data.state)
-          set(data.state)
-
-          const { active, turn } = get()
-          if (active && active.player !== turn) {
-            set({ active: null, hold: false })
-          }
-        }
-      })
-      socket.addEventListener('close', (evt) => {
-        console.log('connect.closed', evt)
-        set({ socket: null })
-        if (mounted && get().online) {
-          connect(room)
-        }
-      })
-      socket.addEventListener('error', (evt) => {
-        console.log('connect.error', evt)
-        socket.close()
-        set({ socket: null })
-      })
-    }
-  },
-}))
-
-if (typeof window !== 'undefined') {
-  const state = ls('thehive:state')
-  if (state) {
-    useGame.setState(state)
-  }
-}
+//           const { active, turn } = get()
+//           if (active && active.player !== turn) {
+//             set({ active: null, hold: false })
+//           }
+//         }
+//       })
+//       socket.addEventListener('close', (evt) => {
+//         console.log('connect.closed', evt)
+//         set({ socket: null })
+//         if (mounted && get().online) {
+//           connect(room)
+//         }
+//       })
+//       socket.addEventListener('error', (evt) => {
+//         console.log('connect.error', evt)
+//         socket.close()
+//         set({ socket: null })
+//       })
+//     }
+//   },
+// }))
 
 function sync(data: Partial<GameType>) {
-  if (!BROADCAST_SERVER) return
-  const { socket, online } = useGame.getState()
-  try {
-    socket.send(JSON.stringify(data))
-  } catch (e) {
-    if (online) {
-      alert('sync down')
-    }
-  }
+  useGame.getState().sync(data)
 }
+
 function activate(active, hold = false) {
   if (active?.player !== useGame.getState().turn) {
     return // console.log('not your turn', active)
@@ -324,15 +290,15 @@ function deactivate() {
   }
 }
 
-function moveStone(stone: Stone, { top = 0, left = 0 }) {
+function moveStone(stone: Piece, { top = 0, left = 0 }) {
   if (!stone) {
     return
   }
-  useGame.setState(({ stones, turn }) => {
+  useGame.setState(({ stones, turn, nextTurn }) => {
     const existing = stones.find((s) => s.id === stone.id)
     const height = stones.filter((s) => s.top === top && s.left === left).length
 
-    turn = turn === 1 ? 2 : 1
+    turn = nextTurn()
     stones = existing
       ? stones
           .filter((s) => s.id !== stone.id)
@@ -380,8 +346,8 @@ function getCenter(stones: Position[]) {
 }
 
 function getMoves(
-  stones: Stone[],
-  active?: { id: number; player: number; type: number } | Stone
+  stones: PlacedPiece[],
+  active?: { id: number; player: number; type: number } | Piece
 ) {
   if (!active) {
     return []
@@ -554,7 +520,7 @@ function toggleFullscreen(evt) {
 }
 
 // Quadratic complexity but n is low
-function highest({ top, left, height }, i, stones) {
+function highest({ top, left, height = 0 }, i, stones) {
   return !stones.find(
     (s) => s.top === top && s.left === left && s.height > height
   )

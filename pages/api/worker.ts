@@ -51,7 +51,8 @@ const toDataURI = (str: string) =>
   'data:application/javascript;charset=utf-8;base64,' + btoa(str)
 
 const workerSource = () =>
-  toDataURI(js`import {
+  toDataURI(js`
+import {
   acceptWebSocket,
   isWebSocketCloseEvent,
   WebSocket,
@@ -59,25 +60,23 @@ const workerSource = () =>
 import type { ServerRequest } from 'https://deno.land/std@0.76.0/http/server.ts'
 console.log('wbw Broadcast worker starting')
 
-type SocketId = number
+type SocketId = string
 
-const port = Math.floor(Math.random() * 10000 + 50000)
 let state = {}
 let serverState = 0
 let sockets = new Map<SocketId, WebSocket>()
 
 export default async function onmessage(data: any) {
-  console.log('wbw.onmessage', port, data)
+  console.log('wbw.onmessage', data)
   return {
     message: {
       serverState,
-      port,
     },
   }
 }
 
 export async function onwebsocket(req: ServerRequest) {
-  console.log("wbw.Accepting websocket!")
+  console.log('wbw.Accepting websocket!')
 
   serverState = 2
 
@@ -88,7 +87,7 @@ export async function onwebsocket(req: ServerRequest) {
     bufWriter,
     headers,
   })
-  const uid = Math.random()
+  const uid = Math.random().toString(36).slice(2)
   onConnect(uid, sock)
   for await (const ev of sock) {
     if (sock.isClosed) {
@@ -103,40 +102,46 @@ export async function onwebsocket(req: ServerRequest) {
 
 function onConnect(id: SocketId, sock: WebSocket) {
   console.log('wbw.ws.join', id, state)
-  sock.send(JSON.stringify({ id, state }))
-  sockets.forEach((sock, uid) => {
-    if (sock.isClosed){
-      console.log('con ignore unexpected close')
-      sockets.delete(uid)
-    }
-  })
-  sockets.forEach(sock => sock.send(JSON.stringify({ join: id })))
   sockets.set(id, sock)
+  broadcast({ join: id }, id)
+  sock.send(JSON.stringify({ id, state, participants: Array.from(sockets.keys()) }))
 }
 
-function onMessage(id: SocketId, newState: string) {
-  console.log('wbw.ws.message', newState)
-  if (!newState.startsWith('{')) return
-  state = { ...state, ...JSON.parse(newState) }
-//filter
-  sockets.forEach((sock, uid) => {
-    if (sock.isClosed){
-      console.log('mes ignore unexpected close')
-      sockets.delete(uid)
-    }
-  })
-  sockets.forEach((sock, uid) => uid !== id && sock.send(JSON.stringify({ id, state })))
+function onMessage(id: SocketId, json: string) {
+  console.log('wbw.ws.message', json)
+  if (!json.startsWith('{')) return
+  const message = JSON.parse(json)
+  if (message.state) {
+    state = { ...state, ...message.state }
+    broadcast({ id, state }, id)
+  }
 }
 
 function onClose(id: SocketId, event?: any) {
   console.log('wbw.ws.close', id, event)
   sockets.delete(id)
+  broadcast({ leave: id })
+}
+
+function broadcast(message: object, uid = '') {
   sockets.forEach((sock, uid) => {
-    if (sock.isClosed){
-      console.log('clo ignore unexpected close')
+    if (sock.isClosed) {
       sockets.delete(uid)
     }
   })
-  sockets.forEach(sock => sock.send(JSON.stringify({ leave: id })))
-}
+  console.log('bro', {
+    ...message,
+    participants: Array.from(sockets.keys()),
+  })
+  sockets.forEach(
+    (sock, id) =>
+      uid !== id &&
+      sock.send(
+        JSON.stringify({
+          participants: Array.from(sockets.keys()),
+          ...message,
+        })
+      )
+  )
+}  
 `)
